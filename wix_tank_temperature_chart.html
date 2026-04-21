@@ -8,13 +8,16 @@
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
     :root {
-      --bg: #f2f6f3;
-      --panel: #ffffff;
-      --ink: #102018;
-      --muted: #4e6056;
-      --accent: #146e4e;
-      --accent-2: #cde7db;
-      --border: #d8e4dd;
+      --bg: #183c2d;
+      --panel: #183c2d;
+      --ink: #edf6ef;
+      --muted: #bfd6c7;
+      --accent: #87d8a8;
+      --accent-2: rgba(135, 216, 168, 0.18);
+      --border: rgba(191, 214, 199, 0.26);
+      --grid: rgba(237, 246, 239, 0.12);
+      --danger-bg: rgba(143, 34, 34, 0.18);
+      --danger-border: rgba(246, 214, 214, 0.22);
     }
 
     * {
@@ -25,19 +28,17 @@
       margin: 0;
       font-family: "Trebuchet MS", "Segoe UI", sans-serif;
       color: var(--ink);
-      background:
-        radial-gradient(circle at 10% 0%, #dceee4 0, transparent 35%),
-        radial-gradient(circle at 90% 100%, #d9efe6 0, transparent 38%),
-        var(--bg);
-      padding: 16px;
+      background: var(--bg);
+      padding: 0;
     }
 
     .card {
       background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      box-shadow: 0 8px 24px rgba(16, 32, 24, 0.08);
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
       overflow: hidden;
+      width: 100%;
     }
 
     .header {
@@ -66,7 +67,7 @@
 
     .season-btn {
       border: 1px solid var(--border);
-      background: #f8fbf9;
+      background: rgba(237, 246, 239, 0.05);
       color: var(--ink);
       border-radius: 999px;
       padding: 7px 12px;
@@ -77,14 +78,18 @@
 
     .season-btn:hover {
       transform: translateY(-1px);
-      border-color: #b5cfc1;
+      border-color: rgba(237, 246, 239, 0.4);
     }
 
     .season-btn.active {
       background: var(--accent-2);
-      border-color: #8ab9a4;
-      color: #0d2c1f;
+      border-color: var(--accent);
+      color: #f7fff8;
       font-weight: 700;
+    }
+
+    .season-btn:disabled {
+      cursor: not-allowed;
     }
 
     #chart {
@@ -99,9 +104,9 @@
     }
 
     .status.error {
-      color: #9d1e1e;
-      background: #fff5f5;
-      border-top: 1px solid #f6d6d6;
+      color: #ffd7d7;
+      background: var(--danger-bg);
+      border-top: 1px solid var(--danger-border);
     }
   </style>
 </head>
@@ -136,11 +141,18 @@
 
     const SEASON_ORDER = ["Spring", "Summer", "Autumn", "Winter"];
 
+    const FIXED_SEASON_WINDOWS = {
+      Spring: {
+        start: new Date(2024, 2, 31, 0, 0, 0, 0),
+        end: new Date(2024, 3, 3, 0, 0, 0, 0)
+      }
+    };
+
     const COLORS = {
-      "Tank Bottom [°C]": "#0f766e",
-      "Tank Mid [°C]": "#0b5fb3",
-      "Tank Mid Hi [°C]": "#b85e11",
-      "Tank Top [°C]": "#9a2e4f"
+      "Tank Bottom [°C]": "#7ae0c6",
+      "Tank Mid [°C]": "#7db8ff",
+      "Tank Mid Hi [°C]": "#ffbf69",
+      "Tank Top [°C]": "#ff8aa5"
     };
 
     function safeNum(value) {
@@ -154,6 +166,13 @@
       const m = String(d.getMonth() + 1).padStart(2, "0");
       const day = String(d.getDate()).padStart(2, "0");
       return `${y}-${m}-${day}`;
+    }
+
+    function formatDateUk(d) {
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
     }
 
     function median(values) {
@@ -263,7 +282,21 @@
         return a.start - b.start;
       });
 
-      return candidates[0];
+      return { ...candidates[0], isFixed: false };
+    }
+
+    function buildFixedSeasonWindow(rows, start, end) {
+      const windowRows = rows.filter(r => r.time >= start && r.time < end);
+      if (!windowRows.length) return null;
+
+      return {
+        start,
+        end,
+        rows: windowRows,
+        completeness: 1,
+        deviation: 0,
+        isFixed: true
+      };
     }
 
     function buildSeasonWindows(rows) {
@@ -271,6 +304,12 @@
       const windows = {};
 
       for (const season of SEASON_ORDER) {
+        const fixedWindow = FIXED_SEASON_WINDOWS[season];
+        if (fixedWindow) {
+          windows[season] = buildFixedSeasonWindow(rows, fixedWindow.start, fixedWindow.end);
+          continue;
+        }
+
         const months = SEASONS[season];
         const seasonRows = rows.filter(r => months.includes(r.time.getMonth() + 1));
         windows[season] = chooseRepresentativeWindow(seasonRows, intervalMs);
@@ -314,22 +353,29 @@
         connectgaps: false
       }));
 
-      subtitle.textContent = `${seasonName}: ${seasonWindow.start.toLocaleDateString()} - ${new Date(seasonWindow.end.getTime() - 1).toLocaleDateString()} (representative 3-day window)`;
+      const endLabelDate = new Date(seasonWindow.end.getTime() - 1);
+      const windowLabel = seasonWindow.isFixed ? "fixed 3-day window" : "representative 3-day window";
+      subtitle.textContent = `${seasonName}: ${formatDateUk(seasonWindow.start)} - ${formatDateUk(endLabelDate)} (${windowLabel})`;
 
       const layout = {
         margin: { l: 54, r: 16, t: 12, b: 56 },
-        plot_bgcolor: "#ffffff",
-        paper_bgcolor: "#ffffff",
+        plot_bgcolor: "#183c2d",
+        paper_bgcolor: "#183c2d",
         hovermode: "x unified",
         xaxis: {
           title: "Date and Time",
           type: "date",
           tickformat: "%d %b\n%H:%M",
-          gridcolor: "#e8efea"
+          gridcolor: "rgba(237, 246, 239, 0.12)",
+          linecolor: "rgba(237, 246, 239, 0.35)",
+          tickcolor: "rgba(237, 246, 239, 0.35)",
+          zeroline: false
         },
         yaxis: {
           title: "Temperature (°C)",
-          gridcolor: "#e8efea",
+          gridcolor: "rgba(237, 246, 239, 0.12)",
+          linecolor: "rgba(237, 246, 239, 0.35)",
+          tickcolor: "rgba(237, 246, 239, 0.35)",
           zeroline: false
         },
         legend: {
@@ -341,7 +387,14 @@
         },
         font: {
           family: "Trebuchet MS, Segoe UI, sans-serif",
-          color: "#102018"
+          color: "#edf6ef"
+        },
+        hoverlabel: {
+          bgcolor: "#204a38",
+          bordercolor: "rgba(237, 246, 239, 0.18)",
+          font: {
+            color: "#edf6ef"
+          }
         }
       };
 
