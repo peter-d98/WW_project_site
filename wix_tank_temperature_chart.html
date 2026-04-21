@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Findhorn Tank Temperatures</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root {
+      --bg: #f2f6f3;
+      --panel: #ffffff;
+      --ink: #102018;
+      --muted: #4e6056;
+      --accent: #146e4e;
+      --accent-2: #cde7db;
+      --border: #d8e4dd;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 0%, #dceee4 0, transparent 35%),
+        radial-gradient(circle at 90% 100%, #d9efe6 0, transparent 38%),
+        var(--bg);
+      padding: 16px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(16, 32, 24, 0.08);
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 14px 16px 8px 16px;
+    }
+
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.35;
+      min-height: 1.2em;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 16px 12px 16px;
+    }
+
+    .season-btn {
+      border: 1px solid var(--border);
+      background: #f8fbf9;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 0.87rem;
+      cursor: pointer;
+      transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+    }
+
+    .season-btn:hover {
+      transform: translateY(-1px);
+      border-color: #b5cfc1;
+    }
+
+    .season-btn.active {
+      background: var(--accent-2);
+      border-color: #8ab9a4;
+      color: #0d2c1f;
+      font-weight: 700;
+    }
+
+    #chart {
+      width: 100%;
+      min-height: 420px;
+    }
+
+    .status {
+      padding: 18px 16px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .status.error {
+      color: #9d1e1e;
+      background: #fff5f5;
+      border-top: 1px solid #f6d6d6;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>Tank Temperatures by Season</h1>
+      <div id="subtitle" class="subtitle"></div>
+    </div>
+    <div id="controls" class="controls" aria-label="Season selector"></div>
+    <div id="chart"></div>
+    <div id="status" class="status">Loading data...</div>
+  </div>
+
+  <script>
+    // You can set this URL directly, or pass ?csv=YOUR_URL in the iframe source.
+    const DEFAULT_CSV_URL = "https://example.com/FullDS_Findhorn_30min.csv";
+
+    const TEMP_COLUMNS = [
+      "Tank Bottom [°C]",
+      "Tank Mid [°C]",
+      "Tank Mid Hi [°C]",
+      "Tank Top [°C]"
+    ];
+
+    const SEASONS = {
+      Spring: [3, 4, 5],
+      Summer: [6, 7, 8],
+      Autumn: [9, 10, 11],
+      Winter: [12, 1, 2]
+    };
+
+    const SEASON_ORDER = ["Spring", "Summer", "Autumn", "Winter"];
+
+    const COLORS = {
+      "Tank Bottom [°C]": "#0f766e",
+      "Tank Mid [°C]": "#0b5fb3",
+      "Tank Mid Hi [°C]": "#b85e11",
+      "Tank Top [°C]": "#9a2e4f"
+    };
+
+    function safeNum(value) {
+      if (value === null || value === undefined || value === "") return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function toDateKeyLocal(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+
+    function median(values) {
+      if (!values.length) return null;
+      const sorted = values.slice().sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      if (sorted.length % 2 === 0) {
+        return (sorted[mid - 1] + sorted[mid]) / 2;
+      }
+      return sorted[mid];
+    }
+
+    function computeMedianIntervalMs(rows) {
+      const diffs = [];
+      for (let i = 1; i < rows.length; i += 1) {
+        const ms = rows[i].time - rows[i - 1].time;
+        if (ms > 0) diffs.push(ms);
+      }
+      const med = median(diffs);
+      return med || 30 * 60 * 1000;
+    }
+
+    function parseCsv(csvText) {
+      const parsed = Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false
+      });
+
+      if (parsed.errors && parsed.errors.length) {
+        const fatal = parsed.errors.find(e => e.type === "Delimiter" || e.code === "UndetectableDelimiter");
+        if (fatal) {
+          throw new Error(`CSV parse error: ${fatal.message}`);
+        }
+      }
+
+      const rows = [];
+      for (const raw of parsed.data) {
+        const t = new Date(raw.Time);
+        if (Number.isNaN(t.getTime())) continue;
+
+        const row = { time: t };
+        for (const col of TEMP_COLUMNS) {
+          row[col] = safeNum(raw[col]);
+        }
+
+        if (TEMP_COLUMNS.some(col => row[col] !== null)) {
+          rows.push(row);
+        }
+      }
+
+      rows.sort((a, b) => a.time - b.time);
+      return rows;
+    }
+
+    function chooseRepresentativeWindow(seasonRows, intervalMs) {
+      if (!seasonRows.length) return null;
+
+      const seasonalMidValues = seasonRows
+        .map(r => r["Tank Mid [°C]"])
+        .filter(v => v !== null);
+
+      const seasonalMidMedian = median(seasonalMidValues);
+      const expectedPoints = Math.max(1, Math.round((72 * 60 * 60 * 1000) / intervalMs));
+
+      const uniqueDateKeys = [];
+      const seen = new Set();
+      for (const row of seasonRows) {
+        const key = toDateKeyLocal(row.time);
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueDateKeys.push(key);
+        }
+      }
+
+      const candidates = [];
+      for (const key of uniqueDateKeys) {
+        const start = new Date(`${key}T00:00:00`);
+        const end = new Date(start.getTime() + 72 * 60 * 60 * 1000);
+
+        const windowRows = seasonRows.filter(r => r.time >= start && r.time < end);
+        if (!windowRows.length) continue;
+
+        const coverageByColumn = TEMP_COLUMNS.map(col => {
+          const valid = windowRows.reduce((acc, row) => acc + (row[col] !== null ? 1 : 0), 0);
+          return valid / expectedPoints;
+        });
+
+        const completeness = coverageByColumn.reduce((a, b) => a + b, 0) / coverageByColumn.length;
+        const meanMid = windowRows
+          .map(r => r["Tank Mid [°C]"])
+          .filter(v => v !== null)
+          .reduce((a, b, i, arr) => a + b / arr.length, 0);
+
+        const deviation = (seasonalMidMedian === null || Number.isNaN(meanMid))
+          ? Number.POSITIVE_INFINITY
+          : Math.abs(meanMid - seasonalMidMedian);
+
+        candidates.push({ start, end, rows: windowRows, completeness, deviation });
+      }
+
+      if (!candidates.length) return null;
+
+      candidates.sort((a, b) => {
+        if (b.completeness !== a.completeness) return b.completeness - a.completeness;
+        if (a.deviation !== b.deviation) return a.deviation - b.deviation;
+        return a.start - b.start;
+      });
+
+      return candidates[0];
+    }
+
+    function buildSeasonWindows(rows) {
+      const intervalMs = computeMedianIntervalMs(rows);
+      const windows = {};
+
+      for (const season of SEASON_ORDER) {
+        const months = SEASONS[season];
+        const seasonRows = rows.filter(r => months.includes(r.time.getMonth() + 1));
+        windows[season] = chooseRepresentativeWindow(seasonRows, intervalMs);
+      }
+
+      return windows;
+    }
+
+    function getCsvUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("csv") || DEFAULT_CSV_URL;
+    }
+
+    function setStatus(text, isError = false) {
+      const el = document.getElementById("status");
+      el.textContent = text;
+      el.classList.toggle("error", isError);
+      el.style.display = text ? "block" : "none";
+    }
+
+    function renderChart(seasonName, seasonWindow) {
+      const subtitle = document.getElementById("subtitle");
+      if (!seasonWindow) {
+        subtitle.textContent = `${seasonName}: no usable 3-day period found in dataset.`;
+        Plotly.purge("chart");
+        return;
+      }
+
+      const x = seasonWindow.rows.map(r => r.time);
+      const traces = TEMP_COLUMNS.map(col => ({
+        x,
+        y: seasonWindow.rows.map(r => r[col]),
+        name: col.replace(" [°C]", ""),
+        mode: "lines",
+        line: {
+          shape: "spline",
+          smoothing: 0.7,
+          width: 2,
+          color: COLORS[col]
+        },
+        connectgaps: false
+      }));
+
+      subtitle.textContent = `${seasonName}: ${seasonWindow.start.toLocaleDateString()} - ${new Date(seasonWindow.end.getTime() - 1).toLocaleDateString()} (representative 3-day window)`;
+
+      const layout = {
+        margin: { l: 54, r: 16, t: 12, b: 56 },
+        plot_bgcolor: "#ffffff",
+        paper_bgcolor: "#ffffff",
+        hovermode: "x unified",
+        xaxis: {
+          title: "Date and Time",
+          type: "date",
+          tickformat: "%d %b\n%H:%M",
+          gridcolor: "#e8efea"
+        },
+        yaxis: {
+          title: "Temperature (°C)",
+          gridcolor: "#e8efea",
+          zeroline: false
+        },
+        legend: {
+          orientation: "h",
+          yanchor: "bottom",
+          y: 1.02,
+          xanchor: "left",
+          x: 0
+        },
+        font: {
+          family: "Trebuchet MS, Segoe UI, sans-serif",
+          color: "#102018"
+        }
+      };
+
+      const config = {
+        responsive: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ["lasso2d", "select2d"]
+      };
+
+      Plotly.react("chart", traces, layout, config);
+    }
+
+    function renderSeasonButtons(seasonWindows, onSelect) {
+      const controls = document.getElementById("controls");
+      controls.innerHTML = "";
+
+      for (const season of SEASON_ORDER) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "season-btn";
+        btn.textContent = season;
+        btn.disabled = !seasonWindows[season];
+        if (!seasonWindows[season]) {
+          btn.title = `No usable data for ${season}`;
+          btn.style.opacity = "0.45";
+        }
+
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".season-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          onSelect(season);
+        });
+
+        controls.appendChild(btn);
+      }
+    }
+
+    async function init() {
+      try {
+        setStatus("Loading data...");
+        const url = getCsvUrl();
+        const resp = await fetch(url, { cache: "no-store" });
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status} when fetching CSV`);
+        }
+
+        const csvText = await resp.text();
+        const rows = parseCsv(csvText);
+        if (!rows.length) {
+          throw new Error("No valid temperature rows found in CSV");
+        }
+
+        const seasonWindows = buildSeasonWindows(rows);
+        renderSeasonButtons(seasonWindows, season => {
+          renderChart(season, seasonWindows[season]);
+        });
+
+        const defaultSeason = SEASON_ORDER.find(s => seasonWindows[s]) || null;
+        if (!defaultSeason) {
+          setStatus("Data loaded, but no usable seasonal 3-day windows were found.", true);
+          return;
+        }
+
+        const defaultBtn = Array.from(document.querySelectorAll(".season-btn"))
+          .find(b => b.textContent === defaultSeason);
+        if (defaultBtn) defaultBtn.classList.add("active");
+
+        renderChart(defaultSeason, seasonWindows[defaultSeason]);
+        setStatus("");
+      } catch (err) {
+        setStatus(
+          `Unable to load chart data. ${err.message}. Ensure the CSV URL is public and CORS is enabled.`,
+          true
+        );
+        Plotly.purge("chart");
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
