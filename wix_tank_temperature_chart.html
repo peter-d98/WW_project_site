@@ -149,6 +149,14 @@
       Summer: {
         start: new Date(2024, 6, 7, 0, 0, 0, 0),
         end: new Date(2024, 6, 10, 0, 0, 0, 0)
+      },
+      Autumn: {
+        start: new Date(2024, 9, 12, 0, 0, 0, 0),
+        end: new Date(2024, 9, 15, 0, 0, 0, 0)
+      },
+      Winter: {
+        start: new Date(2024, 11, 25, 0, 0, 0, 0),
+        end: new Date(2024, 11, 28, 0, 0, 0, 0)
       }
     };
 
@@ -157,6 +165,25 @@
       "Tank Mid [°C]": "#7db8ff",
       "Tank Mid Hi [°C]": "#ffbf69",
       "Tank Top [°C]": "#ff8aa5"
+    };
+
+    const ANNOTATIONS = {
+      Spring: [
+        { datetime: new Date(2024, 2, 31, 10, 0, 0), col: "Tank Bottom [\u00b0C]", text: "Gradual solar charge event \u2013 set-point not reached" },
+        { datetime: new Date(2024, 2, 31, 14, 0, 0), col: "Tank Top [\u00b0C]",    text: "Legionella cycling \u2013 occurs once every 7 days" }
+      ],
+      Summer: [
+        { datetime: new Date(2024, 6, 7,  10, 0, 0), col: "Tank Top [\u00b0C]", text: "Typical solar charge event \u2013 set point (~62\u00b0C) reached" },
+        { datetime: new Date(2024, 6, 9,   2, 0, 0), col: "Tank Top [\u00b0C]", text: "ASHP charge right before solar input \u2013 MPC should fix this" }
+      ],
+      Autumn: [
+        { datetime: new Date(2024, 9, 13,  5, 30, 0), col: "Tank Bottom [\u00b0C]", text: "Draw event \u2013 sudden drop in bottom node temperature" },
+        { datetime: new Date(2024, 9, 13, 22,  0, 0), col: "Tank Bottom [\u00b0C]", text: "Ambient gains in the bottom node due to internode mixing/conduction" }
+      ],
+      Winter: [
+        { datetime: new Date(2024, 11, 26, 21, 30, 0), col: "Tank Mid [\u00b0C]", text: "Comfort threshold (~45\u00b0C) reached \u2013 ASHP turns on" },
+        { datetime: new Date(2024, 11, 26, 22, 30, 0), col: "Tank Top [\u00b0C]", text: "Upper set-point (~55\u00b0C) reached \u2013 ASHP turns off" }
+      ]
     };
 
     function safeNum(value) {
@@ -356,6 +383,29 @@
         },
         connectgaps: false
       }));
+
+      for (const ann of (ANNOTATIONS[seasonName] || [])) {
+        const row = seasonWindow.rows.reduce((best, r) => {
+          const diff = Math.abs(r.time - ann.datetime);
+          return (!best || diff < Math.abs(best.time - ann.datetime)) ? r : best;
+        }, null);
+        if (!row || row[ann.col] === null) continue;
+        traces.push({
+          x: [row.time],
+          y: [row[ann.col]],
+          mode: "markers",
+          marker: {
+            color: "#ff4444",
+            size: 11,
+            symbol: "circle",
+            line: { color: "rgba(255,255,255,0.85)", width: 2 }
+          },
+          hovertemplate: "%{customdata}<extra>\ud83d\udccc</extra>",
+          customdata: [ann.text],
+          showlegend: false,
+          name: ""
+        });
+      }
 
       const endLabelDate = new Date(seasonWindow.end.getTime() - 1);
       const windowLabel = seasonWindow.isFixed ? "fixed 3-day window" : "representative 3-day window";
