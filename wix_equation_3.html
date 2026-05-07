@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>COP Equation</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: transparent;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: #edf6ef;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    #eq {
+      font-size: clamp(0.95rem, 2.5vw, 1.15rem);
+      overflow-x: auto;
+      text-align: center;
+    }
+
+    .katex { color: #edf6ef; }
+  </style>
+</head>
+<body>
+  <div id="eq"></div>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      katex.render(
+        "\\mathrm{COP} = c_0 + c_1 T_{\\text{out}} + c_2 T_{\\text{sink}} + c_3 T_{\\text{out}} T_{\\text{sink}}",
+        document.getElementById("eq"),
+        { displayMode: true, throwOnError: false }
+      );
+    });
+  </script>
+</body>
+</html>
