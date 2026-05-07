@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DHW Demand Profiles</title>
+  <style>
+    :root {
+      --ink: #edf6ef;
+      --muted: #bfd6c7;
+      --accent: #87d8a8;
+      --accent-2: rgba(135, 216, 168, 0.18);
+      --border: rgba(191, 214, 199, 0.26);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: transparent;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      padding: 16px;
+    }
+
+    h1 {
+      font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+      letter-spacing: 0.01em;
+      margin-bottom: 14px;
+    }
+
+    #image-container {
+      width: 100%;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    #profile-img {
+      width: 100%;
+      max-width: 860px;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+      border-radius: 6px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .month-btn {
+      border: 1px solid var(--border);
+      background: rgba(237, 246, 239, 0.05);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 7px 13px;
+      font-size: 0.87rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+    }
+
+    .month-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(237, 246, 239, 0.4);
+    }
+
+    .month-btn.active {
+      background: var(--accent-2);
+      border-color: var(--accent);
+      color: #f7fff8;
+      font-weight: 700;
+    }
+
+    .nav-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .nav-btn {
+      border: 1px solid var(--border);
+      background: rgba(237, 246, 239, 0.05);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 7px 16px;
+      font-size: 0.87rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 120ms ease, background-color 120ms ease;
+    }
+
+    .nav-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(237, 246, 239, 0.4);
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #month-label {
+      font-size: 0.95rem;
+      color: var(--muted);
+      min-width: 90px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>DHW Demand Profiles</h1>
+
+  <div id="image-container">
+    <img id="profile-img" src="" alt="DHW demand profile" />
+  </div>
+
+  <div class="controls" id="month-buttons"></div>
+
+  <div class="nav-row">
+    <button class="nav-btn" id="prev-btn">&#8592; Prev</button>
+    <span id="month-label"></span>
+    <button class="nav-btn" id="next-btn">Next &#8594;</button>
+  </div>
+
+  <script>
+    // Base URL for the images — set this to wherever the dhw_demand_profs folder is hosted.
+    // If passing via query param ?base=URL, that takes priority.
+    const DEFAULT_BASE_URL = "https://peter-d98.github.io/WW_project_site/dhw_demand_profs";
+
+    const MONTHS = [
+      "January", "February", "March", "April",
+      "May", "June", "July", "August",
+      "September", "October", "November", "December"
+    ];
+
+    function getBaseUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return (params.get("base") || DEFAULT_BASE_URL).replace(/\/$/, "");
+    }
+
+    function imgUrl(monthIndex) {
+      const num = String(monthIndex + 1).padStart(2, "0");
+      return `${getBaseUrl()}/month_${num}_profile.png`;
+    }
+
+    let current = 0;
+
+    function show(index) {
+      current = index;
+      document.getElementById("profile-img").src = imgUrl(index);
+      document.getElementById("profile-img").alt = `DHW demand profile — ${MONTHS[index]}`;
+      document.getElementById("month-label").textContent = MONTHS[index];
+
+      document.querySelectorAll(".month-btn").forEach((btn, i) => {
+        btn.classList.toggle("active", i === index);
+      });
+
+      document.getElementById("prev-btn").disabled = index === 0;
+      document.getElementById("next-btn").disabled = index === 11;
+    }
+
+    function init() {
+      const container = document.getElementById("month-buttons");
+      MONTHS.forEach((name, i) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "month-btn";
+        btn.textContent = name.slice(0, 3);
+        btn.title = name;
+        btn.addEventListener("click", () => show(i));
+        container.appendChild(btn);
+      });
+
+      document.getElementById("prev-btn").addEventListener("click", () => {
+        if (current > 0) show(current - 1);
+      });
+      document.getElementById("next-btn").addEventListener("click", () => {
+        if (current < 11) show(current + 1);
+      });
+
+      show(0);
+    }
+
+    init();
+  </script>
+</body>
+</html>
