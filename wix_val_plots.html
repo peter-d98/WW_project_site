@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tank Model Validation Plots</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: transparent;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: #edf6ef;
+      padding: 16px;
+    }
+
+    h1 {
+      font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+      letter-spacing: 0.01em;
+      margin-bottom: 14px;
+    }
+
+    #image-container {
+      width: 100%;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    #val-img {
+      width: 100%;
+      max-width: 900px;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+      border-radius: 6px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .plot-btn {
+      border: 1px solid rgba(191, 214, 199, 0.26);
+      background: rgba(237, 246, 239, 0.05);
+      color: #edf6ef;
+      border-radius: 999px;
+      padding: 7px 13px;
+      font-size: 0.87rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+      white-space: nowrap;
+    }
+
+    .plot-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(237, 246, 239, 0.4);
+    }
+
+    .plot-btn.active {
+      background: rgba(135, 216, 168, 0.18);
+      border-color: #87d8a8;
+      color: #f7fff8;
+      font-weight: 700;
+    }
+
+    .nav-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .nav-btn {
+      border: 1px solid rgba(191, 214, 199, 0.26);
+      background: rgba(237, 246, 239, 0.05);
+      color: #edf6ef;
+      border-radius: 999px;
+      padding: 7px 16px;
+      font-size: 0.87rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 120ms ease, background-color 120ms ease;
+    }
+
+    .nav-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(237, 246, 239, 0.4);
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #plot-label {
+      font-size: 0.9rem;
+      color: #bfd6c7;
+      min-width: 160px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tank Model Validation</h1>
+
+  <div id="image-container">
+    <img id="val-img" src="" alt="Validation plot" />
+  </div>
+
+  <div class="controls" id="plot-buttons"></div>
+
+  <div class="nav-row">
+    <button class="nav-btn" id="prev-btn">&#8592; Prev</button>
+    <span id="plot-label"></span>
+    <button class="nav-btn" id="next-btn">Next &#8594;</button>
+  </div>
+
+  <script>
+    const BASE_URL = "https://peter-d98.github.io/WW_project_site/val_plots";
+
+    const PLOTS = [
+      {
+        file: "window_20240115_0000_to_20240116_2330_bottom_only_top4.png",
+        label: "15–16 Jan 2024"
+      },
+      {
+        file: "window_20240415_0000_to_20240416_2330_bottom_only.png",
+        label: "15–16 Apr 2024"
+      },
+      {
+        file: "window_20240715_0000_to_20240716_2330_bottom_only_top4.png",
+        label: "15–16 Jul 2024"
+      },
+      {
+        file: "window_20241003_0000_to_20241004_2330_bottom_only.png",
+        label: "03–04 Oct 2024"
+      }
+    ];
+
+    let current = 0;
+
+    function show(index) {
+      current = index;
+      const plot = PLOTS[index];
+      const img = document.getElementById("val-img");
+      img.src = `${BASE_URL}/${plot.file}`;
+      img.alt = `Validation plot — ${plot.label}`;
+      document.getElementById("plot-label").textContent = plot.label;
+
+      document.querySelectorAll(".plot-btn").forEach((btn, i) => {
+        btn.classList.toggle("active", i === index);
+      });
+
+      document.getElementById("prev-btn").disabled = index === 0;
+      document.getElementById("next-btn").disabled = index === PLOTS.length - 1;
+    }
+
+    function init() {
+      const container = document.getElementById("plot-buttons");
+      PLOTS.forEach((plot, i) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "plot-btn";
+        btn.textContent = plot.label;
+        btn.addEventListener("click", () => show(i));
+        container.appendChild(btn);
+      });
+
+      document.getElementById("prev-btn").addEventListener("click", () => {
+        if (current > 0) show(current - 1);
+      });
+      document.getElementById("next-btn").addEventListener("click", () => {
+        if (current < PLOTS.length - 1) show(current + 1);
+      });
+
+      show(0);
+    }
+
+    init();
+  </script>
+</body>
+</html>
